@@ -1,0 +1,80 @@
+const sqlite3 = require('sqlite3').verbose();
+const readline = require('readline-sync');
+
+// ----------------------
+// 1. Connect / Create Database
+// ----------------------
+const db = new sqlite3.Database('smart_waste.db');
+
+db.serialize(() => {
+    // ----------------------
+    // 2. Create Tables
+    // ----------------------
+    db.run(`CREATE TABLE IF NOT EXISTS bins (
+        bin_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        location TEXT NOT NULL,
+        latitude REAL,
+        longitude REAL
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS bin_status (
+        status_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bin_id INTEGER,
+        fill_level INTEGER,
+        weight REAL,
+        updated_at TEXT,
+        FOREIGN KEY (bin_id) REFERENCES bins(bin_id)
+    )`);
+
+    console.log("✅ Database and tables are ready.");
+
+    // ----------------------
+    // 3. Take User Input
+    // ----------------------
+    const location = readline.question("Enter bin location: ");
+    const latitude = parseFloat(readline.question("Enter latitude: "));
+    const longitude = parseFloat(readline.question("Enter longitude: "));
+
+    db.run(`INSERT INTO bins (location, latitude, longitude) VALUES (?, ?, ?)`,
+        [location, latitude, longitude],
+        function(err) {
+            if(err) return console.error(err.message);
+            const bin_id = this.lastID;
+
+            // ----------------------
+            // 4. Simulate Image Detection / Sensor Data
+            // ----------------------
+            const fill_level = parseInt(readline.question("Enter fill level (0-100): "));
+            const weight = parseFloat(readline.question("Enter garbage weight (kg): "));
+
+            // ----------------------
+            // 5. Insert into bin_status
+            // ----------------------
+            db.run(`INSERT INTO bin_status (bin_id, fill_level, weight, updated_at)
+                    VALUES (?, ?, ?, datetime('now'))`,
+                    [bin_id, fill_level, weight],
+                    (err) => {
+                        if(err) return console.error(err.message);
+
+                        // ----------------------
+                        // 6. Display all stored data
+                        // ----------------------
+                        console.log("\n📋 All Stored Data:\n");
+                        db.all(`SELECT b.bin_id, b.location, s.fill_level, s.weight, s.updated_at
+                                FROM bins b
+                                JOIN bin_status s ON b.bin_id = s.bin_id`, [], (err, rows) => {
+                            if(err) return console.error(err.message);
+                            rows.forEach((row) => {
+                                console.log("Bin ID:", row.bin_id);
+                                console.log("Location:", row.location);
+                                console.log("Fill Level:", row.fill_level + "%");
+                                console.log("Weight:", row.weight + " kg");
+                                console.log("Updated At:", row.updated_at);
+                                console.log("-------------------------");
+                            });
+
+                            db.close();
+                        });
+                    });
+        });
+});
